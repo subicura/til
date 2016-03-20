@@ -21,4 +21,5 @@ $ curl -sSL https://raw.githubusercontent.com/ajh17/Spacegray.vim/master/colors/
 syntax enable
 colorscheme spacegray
 set nu
+set term=screen-256color
 ```
