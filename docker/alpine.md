@@ -29,3 +29,11 @@ $ apk --update add openssl-dev zlib-dev
 ```
 $ apk --update add openssl-dev pcre-dev zlib-dev wget build-base
 ```
+
+## docker image tip
+
+이미지 빌드후 빌드관련 라이브러리와 package 캐시를 제거
+
+```
+$ apk del build-base && rm -rf /var/cache/apk/*
+```
