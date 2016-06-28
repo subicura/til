@@ -46,3 +46,7 @@ bindkey '^r' peco-select-history
 HISTSIZE=100000000
 SAVEHIST=100000000
 ```
+
+## fzf
+
+peco대신 [fzf](https://github.com/junegunn/fzf)를 쓰기 시작함
