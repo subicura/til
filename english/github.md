@@ -14,3 +14,8 @@
   - It's better to use xxx.
 - 버그 같네요 고칠께요
   - It sounds like a bug. I'll work on it soon.
+- 문제없어요
+  - No problem.(n/p)
+- 알려주세요
+  - Please, let me know. (lmk)
+  
