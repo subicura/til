@@ -22,5 +22,5 @@ $ npm publish ./
 ```
 $ git checkout v1.0.7
 $ npm publish ./
-$ npm dist-tag foobar@1.0.7 latest
+$ npm dist-tag add foobar@1.0.7 latest
 ```
