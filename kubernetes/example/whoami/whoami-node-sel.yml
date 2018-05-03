@@ -1,0 +1,58 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: whoami-ingress
+  annotations:
+    ingress.kubernetes.io/rewrite-target: "/"
+    ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+  - http:
+      paths: 
+      - path: /whoami
+        backend:
+          serviceName: whoami
+          servicePort: 4567
+---
+
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: whoami
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      type: frontend
+      service: whoami
+  template:
+    metadata:
+      labels:
+        type: frontend
+        service: whoami
+    spec:
+      containers:
+      - name: k8s-frontend
+        image: subicura/whoami:1
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: disktype
+                operator: In
+                values:
+                - ssd
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+spec:
+  ports:
+  - port: 4567
+  selector:
+    type: frontend
+    service: whoami
