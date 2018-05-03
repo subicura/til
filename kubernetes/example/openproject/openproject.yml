@@ -1,0 +1,90 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: openproject-ingress
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+  - http:
+      paths: 
+      - path: /
+        backend:
+          serviceName: openproject
+          servicePort: 80
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: openproject-db
+spec:
+  storageClassName: gp2
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 64Gi
+
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: openproject-data
+spec:
+  storageClassName: gp2
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 64Gi
+
+---
+
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: openproject
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      type: frontend
+      service: openproject
+  template:
+    metadata:
+      labels:
+        type: frontend
+        service: openproject
+    spec:
+      containers:
+      - name: openproject
+        image: openproject/community:7.4.0
+        env:
+        - name: SECRET_KEY_BASE
+          value: youshouldoverwritethiswithsomethingelse
+        volumeMounts:
+        - name: openproject-db
+          mountPath: /var/lib/postgresql
+        - name: openproject-data
+          mountPath: /var/db/openproject
+      volumes:
+      - name: openproject-db
+        persistentVolumeClaim:
+          claimName: openproject-db
+      - name: openproject-data
+        persistentVolumeClaim:
+          claimName: openproject-data
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: openproject
+spec:
+  ports:
+  - port: 80
+  selector:
+    type: frontend
+    service: openproject

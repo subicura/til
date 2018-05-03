@@ -1,0 +1,69 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: whoami-ingress
+  annotations:
+    ingress.kubernetes.io/rewrite-target: "/"
+    ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+  - http:
+      paths: 
+      - path: /whoami
+        backend:
+          serviceName: whoami
+          servicePort: 4567
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: whoami-data
+spec:
+  storageClassName: gp2
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: whoami
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      type: frontend
+      service: whoami
+  template:
+    metadata:
+      labels:
+        type: frontend
+        service: whoami
+    spec:
+      containers:
+      - name: k8s-frontend
+        image: subicura/whoami:1
+        volumeMounts:
+        - name: whoami-data
+          mountPath: /data
+      volumes:
+      - name: whoami-data
+        persistentVolumeClaim:
+          claimName: whoami-data
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+spec:
+  ports:
+  - port: 4567
+  selector:
+    type: frontend
+    service: whoami

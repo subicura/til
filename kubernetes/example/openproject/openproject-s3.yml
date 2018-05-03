@@ -1,0 +1,83 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: openproject-ingress
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+  - http:
+      paths: 
+      - path: /
+        backend:
+          serviceName: openproject
+          servicePort: 80
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: openproject-db
+spec:
+  storageClassName: gp2
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 64Gi
+
+---
+
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: openproject
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      type: frontend
+      service: openproject
+  template:
+    metadata:
+      labels:
+        type: frontend
+        service: openproject
+    spec:
+      containers:
+      - name: openproject
+        image: openproject/community:7.4.0
+        env:
+        - name: SECRET_KEY_BASE
+          value: youshouldoverwritethiswithsomethingelse
+        - name: OPENPROJECT_ATTACHMENTS__STORAGE
+          value: fog
+        - name: OPENPROJECT_FOG_CREDENTIALS_AWS__ACCESS__KEY__ID
+          value: KEY
+        - name: OPENPROJECT_FOG_CREDENTIALS_AWS__SECRET__ACCESS__KEY
+          value: ACCESS_KEY
+        - name: OPENPROJECT_FOG_CREDENTIALS_PROVIDER
+          value: AWS
+        - name: OPENPROJECT_FOG_CREDENTIALS_REGION
+          value: ap-northeast-2
+        - name: OPENPROJECT_FOG_DIRECTORY
+          value: subicura-openproject
+        volumeMounts:
+        - name: openproject-db
+          mountPath: /var/lib/postgresql
+      volumes:
+      - name: openproject-db
+        persistentVolumeClaim:
+          claimName: openproject-db
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: openproject
+spec:
+  ports:
+  - port: 80
+  selector:
+    type: frontend
+    service: openproject
