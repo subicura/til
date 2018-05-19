@@ -77,27 +77,28 @@ spec:
     app: postgres
 
 ---
-
-apiVersion: apps/v1  #  for k8s versions before 1.9.0 use apps/v1beta2  and before 1.8.0 use extensions/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
+  creationTimestamp: null
   name: postgres
   namespace: kong
 spec:
-  serviceName: "postgres"
   replicas: 1
   selector:
     matchLabels:
       app: postgres
+  serviceName: postgres
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/status: '{"version":"15bbcd92b59e99a83360c48bd7af9e84ffd5b961b914e8febcee0e38d08b773e","initContainers":["istio-init","enable-core-dump"],"containers":["istio-proxy"],"volumes":["istio-envoy","istio-certs"]}'
+      creationTimestamp: null
       labels:
         app: postgres
     spec:
       containers:
-      - name: postgres
-        image: postgres:9.5
-        env:
+      - env:
         - name: POSTGRES_USER
           value: kong
         - name: POSTGRES_PASSWORD
@@ -106,25 +107,118 @@ spec:
           value: kong
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
+        image: postgres:9.5
+        name: postgres
         ports:
-          - containerPort: 5432
-      # No pre-stop hook is required, a SIGTERM plus some time is all that's
-      # needed for graceful shutdown of a node.
+        - containerPort: 5432
+        resources: {}
+      - args:
+        - proxy
+        - sidecar
+        - --configPath
+        - /etc/istio/proxy
+        - --binaryPath
+        - /usr/local/bin/envoy
+        - --serviceCluster
+        - postgres
+        - --drainDuration
+        - 45s
+        - --parentShutdownDuration
+        - 1m0s
+        - --discoveryAddress
+        - istio-pilot.istio-system:8080
+        - --discoveryRefreshDelay
+        - 1s
+        - --zipkinAddress
+        - zipkin.istio-system:9411
+        - --connectTimeout
+        - 10s
+        - --statsdUdpAddress
+        - istio-mixer.istio-system:9125
+        - --proxyAdminPort
+        - "15000"
+        - --controlPlaneAuthPolicy
+        - NONE
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        image: docker.io/istio/proxy_debug:0.7.1
+        imagePullPolicy: IfNotPresent
+        name: istio-proxy
+        resources: {}
+        securityContext:
+          privileged: true
+          readOnlyRootFilesystem: false
+          runAsUser: 1337
+        volumeMounts:
+        - mountPath: /etc/istio/proxy
+          name: istio-envoy
+        - mountPath: /etc/certs/
+          name: istio-certs
+          readOnly: true
+      initContainers:
+      - args:
+        - -p
+        - "15001"
+        - -u
+        - "1337"
+        image: docker.io/istio/proxy_init:0.7.1
+        imagePullPolicy: IfNotPresent
+        name: istio-init
+        resources: {}
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+          privileged: true
+      - args:
+        - -c
+        - sysctl -w kernel.core_pattern=/etc/istio/proxy/core.%e.%p.%t && ulimit -c
+          unlimited
+        command:
+        - /bin/sh
+        image: alpine
+        imagePullPolicy: IfNotPresent
+        name: enable-core-dump
+        resources: {}
+        securityContext:
+          privileged: true
       terminationGracePeriodSeconds: 60
       volumes:
       - name: datadir
         persistentVolumeClaim:
           claimName: datadir
+      - emptyDir:
+          medium: Memory
+        name: istio-envoy
+      - name: istio-certs
+        secret:
+          optional: true
+          secretName: istio.default
+  updateStrategy: {}
   volumeClaimTemplates:
   - metadata:
+      creationTimestamp: null
       name: datadir
     spec:
       accessModes:
-        - "ReadWriteOnce"
+      - ReadWriteOnce
       resources:
         requests:
           storage: 1Gi
-
+    status: {}
+status:
+  replicas: 0
 ---
 
 apiVersion: v1
@@ -288,10 +382,10 @@ spec:
     app: ingress-kong
 
 ---
-
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
+  creationTimestamp: null
   labels:
     app: ingress-kong
   name: kong-ingress-controller
@@ -308,41 +402,28 @@ spec:
   template:
     metadata:
       annotations:
-        # the returned metrics are related to the kong ingress controller not kong itself
         prometheus.io/port: "10254"
         prometheus.io/scrape: "true"
+        sidecar.istio.io/status: '{"version":"15bbcd92b59e99a83360c48bd7af9e84ffd5b961b914e8febcee0e38d08b773e","initContainers":["istio-init","enable-core-dump"],"containers":["istio-proxy"],"volumes":["istio-envoy","istio-certs"]}'
+      creationTimestamp: null
       labels:
         app: ingress-kong
     spec:
-      serviceAccountName: kong-serviceaccount
-      initContainers:
-      - name: kong-migration
-        image: kong:0.13.1-centos
-        env:
-          - name: KONG_PG_PASSWORD
-            value: kong
-          - name: KONG_PG_HOST
-            value: postgres
-        command: [ "/bin/sh", "-c", "kong migrations up" ]
       containers:
-      - name: admin-api
+      - env:
+        - name: KONG_PG_PASSWORD
+          value: kong
+        - name: KONG_PG_HOST
+          value: postgres
+        - name: KONG_ADMIN_ACCESS_LOG
+          value: /dev/stdout
+        - name: KONG_ADMIN_ERROR_LOG
+          value: /dev/stderr
+        - name: KONG_ADMIN_LISTEN
+          value: 0.0.0.0:8001
+        - name: KONG_PROXY_LISTEN
+          value: "off"
         image: kong:0.13.1-centos
-        env:
-          - name: KONG_PG_PASSWORD
-            value: kong
-          - name: KONG_PG_HOST
-            value: postgres
-          - name: KONG_ADMIN_ACCESS_LOG
-            value: /dev/stdout
-          - name: KONG_ADMIN_ERROR_LOG
-            value: /dev/stderr
-          - name: KONG_ADMIN_LISTEN
-            value: 0.0.0.0:8001
-          - name: KONG_PROXY_LISTEN
-            value: 'off'
-        ports:
-        - name: kong-admin
-          containerPort: 8001
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -353,6 +434,10 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 1
+        name: admin-api
+        ports:
+        - containerPort: 8001
+          name: kong-admin
         readinessProbe:
           failureThreshold: 3
           httpGet:
@@ -362,14 +447,11 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 1
-      - name: ingress-controller
-        args:
+        resources: {}
+      - args:
         - /kong-ingress-controller
-        # the kong URL points to the kong admin api server
         - --kong-url=http://localhost:8001
-        # the default service is the kong proxy service
         - --default-backend-service=kong/kong-proxy
-        # Service from were we extract the IP address/es to use in Ingress status
         - --publish-service=kong/kong-proxy
         env:
         - name: POD_NAME
@@ -394,6 +476,7 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 1
+        name: ingress-controller
         readinessProbe:
           failureThreshold: 3
           httpGet:
@@ -403,7 +486,110 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 1
-
+        resources: {}
+      - args:
+        - proxy
+        - sidecar
+        - --configPath
+        - /etc/istio/proxy
+        - --binaryPath
+        - /usr/local/bin/envoy
+        - --serviceCluster
+        - ingress-kong
+        - --drainDuration
+        - 45s
+        - --parentShutdownDuration
+        - 1m0s
+        - --discoveryAddress
+        - istio-pilot.istio-system:8080
+        - --discoveryRefreshDelay
+        - 1s
+        - --zipkinAddress
+        - zipkin.istio-system:9411
+        - --connectTimeout
+        - 10s
+        - --statsdUdpAddress
+        - istio-mixer.istio-system:9125
+        - --proxyAdminPort
+        - "15000"
+        - --controlPlaneAuthPolicy
+        - NONE
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        image: docker.io/istio/proxy_debug:0.7.1
+        imagePullPolicy: IfNotPresent
+        name: istio-proxy
+        resources: {}
+        securityContext:
+          privileged: true
+          readOnlyRootFilesystem: false
+          runAsUser: 1337
+        volumeMounts:
+        - mountPath: /etc/istio/proxy
+          name: istio-envoy
+        - mountPath: /etc/certs/
+          name: istio-certs
+          readOnly: true
+      initContainers:
+      - command:
+        - /bin/sh
+        - -c
+        - kong migrations up
+        env:
+        - name: KONG_PG_PASSWORD
+          value: kong
+        - name: KONG_PG_HOST
+          value: postgres
+        image: kong:0.13.1-centos
+        name: kong-migration
+        resources: {}
+      - args:
+        - -p
+        - "15001"
+        - -u
+        - "1337"
+        image: docker.io/istio/proxy_init:0.7.1
+        imagePullPolicy: IfNotPresent
+        name: istio-init
+        resources: {}
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+          privileged: true
+      - args:
+        - -c
+        - sysctl -w kernel.core_pattern=/etc/istio/proxy/core.%e.%p.%t && ulimit -c
+          unlimited
+        command:
+        - /bin/sh
+        image: alpine
+        imagePullPolicy: IfNotPresent
+        name: enable-core-dump
+        resources: {}
+        securityContext:
+          privileged: true
+      serviceAccountName: kong-serviceaccount
+      volumes:
+      - emptyDir:
+          medium: Memory
+        name: istio-envoy
+      - name: istio-certs
+        secret:
+          optional: true
+          secretName: istio.kong-serviceaccount
+status: {}
 ---
 
 apiVersion: v1
@@ -426,7 +612,6 @@ spec:
     app: kong
 
 ---
-
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
