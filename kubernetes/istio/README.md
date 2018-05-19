@@ -117,6 +117,15 @@ kubectl -n istio-system port-forward $(kubectl -n istio-system get pod -l app=se
 open http://localhost:8088/dotviz
 ```
 
+### All addon
+
+```
+kubectl apply -f install/kubernetes/addons/zipkin.yaml
+kubectl apply -f install/kubernetes/addons/prometheus.yaml
+kubectl apply -f install/kubernetes/addons/grafana.yaml
+kubectl apply -f install/kubernetes/addons/servicegraph.yaml
+```
+
 ## Traffic Management
 
 `istioctl` 명령어를 사용
@@ -167,7 +176,7 @@ kubectl delete ing/gateway
 
 ```
 # run
-istioctl kube-inject --debug -f kong/all-in-one-postgres.yaml | kubectl apply -f -
+kubectl apply -f kong/all-in-one-postgres.yaml
 # check
 kubectl -n kong get all
 ```
@@ -181,6 +190,17 @@ istioctl kube-inject --debug -f kong/bookinfo-kong.yaml | kubectl apply -f -
 kubectl get all
 # test
 watch -n 1 curl -I -s http://localhost/productpage
+```
+
+service port name을 http로 지정해야 정상적으로 metrics 수집함
+
+```
+# run
+istioctl kube-inject --debug -f kong/restapi-sample.yaml | kubectl apply -f -
+# check
+kubectl get all
+# test
+watch -n 1 curl -I -s http://localhost/sample
 ```
 
 ## Trouble Shooting

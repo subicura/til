@@ -1,0 +1,59 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: rest-api-sample
+spec:
+  rules:
+  - host: localhost
+    http:
+      paths:
+      - path: /sample
+        backend:
+          serviceName: rest-api-sample
+          servicePort: 80
+---
+
+apiVersion: configuration.konghq.com/v1
+kind: KongIngress
+metadata:
+  name: rest-api-sample
+proxy:
+  path: /external
+route:
+  strip_path: true  
+upstream:
+  service_upstream: true
+---
+
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: rest-api-sample
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: rest-api-sample
+  template:
+    metadata:
+      labels:
+        service: rest-api-sample
+        version: v1
+    spec:
+      containers:
+      - name: rest-api-sample
+        image: subicura/rest-api-sample:1
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: rest-api-sample
+spec:
+  ports:
+  - port: 80
+    targetPort: 4567
+    name: http
+  selector:
+    service: rest-api-sample
