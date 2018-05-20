@@ -192,7 +192,9 @@ kubectl get all
 watch -n 1 curl -I -s http://localhost/productpage
 ```
 
-service port name을 http로 지정해야 정상적으로 metrics 수집함
+- service port name을 http로 지정해야 정상적으로 metrics 수집함
+- label은 app, version 기본 맵핑
+- zipkin https://istio.io/docs/tasks/telemetry/distributed-tracing.html
 
 ```
 # run
@@ -200,7 +202,9 @@ istioctl kube-inject --debug -f kong/restapi-sample.yaml | kubectl apply -f -
 # check
 kubectl get all
 # test
-watch -n 1 curl -I -s http://localhost/sample
+watch -n 1 curl -I -s http://localhost/sample/v1/200
+watch -n 1 curl -I -s http://localhost/sample/v1/400
+watch -n 1 curl -I -s http://localhost/sample/v1/500
 ```
 
 ## Trouble Shooting

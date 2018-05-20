@@ -33,11 +33,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      service: rest-api-sample
+      app: rest-api-sample
   template:
     metadata:
       labels:
-        service: rest-api-sample
+        app: rest-api-sample
         version: v1
     spec:
       containers:
@@ -56,4 +56,4 @@ spec:
     targetPort: 4567
     name: http
   selector:
-    service: rest-api-sample
+    app: rest-api-sample
