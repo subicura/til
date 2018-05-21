@@ -2,9 +2,13 @@
 
 [kops](https://github.com/kubernetes/kops) 구성 테스트
 
-kops는 aws, kops 클라이언트로 명령어를 전달하고 AWS S3 특정 bucket에 설정을 관리
+kops는 aws, kops 클라이언트로 명령어를 전달하고 AWS S3 특정 bucket에 설정을 저장하여 관리함
 
-## 프로그램
+## Prerequire
+
+### aws / kops
+
+client를 설치해야함. (윈도우는 kops를 도커로 실행)
 
 ```
 brew update
@@ -15,24 +19,27 @@ brew install kops
 kops version
 ```
 
+### aws credentials
+
 `~/.aws/config`에 profile 저장
 `aws > 내 보안 자격 증명` 에서 생성
 
-## AWS 설정
+### AWS 설정
 
-기본 profile 설정
+기본 profile 환경변수 설정
 
 ```
 export AWS_DEFAULT_PROFILE=subicura
 export AWS_PROFILE=subicura
+# test
 aws s3 ls
 ```
 
-## 기본 권한 설정
+## AWS Kops용 권한 설정
 
 한번만 설정하면 됨
 
-**group**
+### group
 
 ```
 aws iam create-group \
@@ -55,7 +62,7 @@ aws iam attach-group-policy \
     --group-name kops
 ```
 
-**user**
+### user
 
 ```
 aws iam create-user \
@@ -76,7 +83,7 @@ export AWS_DEFAULT_PROFILE=kops
 aws iam get-user
 ```
 
-**ssh key**
+### ssh key
 
 ```
 mkdir -p cluster
@@ -94,8 +101,6 @@ ssh-keygen -y -f kops-subicura.pem \
 ```
 
 pem키는 ~/.ssh에 복사하고 pub만 남겨두자
-
-----
 
 ## kubernetes 클러스터 만들기
 
@@ -122,6 +127,7 @@ export ZONES=$(aws ec2 \
 ZONES=${ZONES%?}
 
 echo $ZONES
+# export ZONES=ap-northeast-2a # 하나만 사용
 
 aws s3api create-bucket \
     --bucket $BUCKET_NAME \
@@ -131,7 +137,9 @@ aws s3api create-bucket \
 aws s3 ls
 ```
 
-### public VPC에 만들기
+### Create Kubernetes Cluster
+
+**Public VPC**
 
 ```
 kops create cluster \
@@ -148,7 +156,7 @@ kops create cluster \
     --yes
 ```
 
-### private VPC에 만들기
+**Private VPC**
 
 ```
 # private vpc https://github.com/kubernetes/kops/blob/master/docs/topology.md
@@ -167,7 +175,7 @@ kops create cluster \
     --yes
 ```
 
-### 존재하는 VPC에 만들기
+**Exist VPC**
 
 VPC 만들고 kops에 붙이기 추천
 
@@ -289,14 +297,16 @@ aws s3api delete-bucket \
 
 ---
 
-## 수정
+## 추가 설정 팁
+
+### Cluster 수정
 
 * list clusters with: kops get cluster
 * edit this cluster with: kops edit cluster kops-subicura.k8s.local
 * edit your node instance group: kops edit ig --name=kops-subicura.k8s.local nodes
 * edit your master instance group: kops edit ig --name=kops-subicura.k8s.local master-ap-northeast-2a-1
 
-## 접근제어
+### 접근제어 (IP 보안)
 
 https://github.com/kubernetes/kops/blob/master/docs/cluster_spec.md
 
@@ -311,104 +321,4 @@ spec:
 ```
 kops edit cluster $NAME
 kops update cluster $NAME --yes
-```
-
----
-
-## sample
-
-### dashboard
-
-```
-kubectl create -f https://raw.githubusercontent.com/kubernetes/dashboard/master/src/deploy/recommended/kubernetes-dashboard.yaml
-
-kubectl -n kube-system get secret
-
-kubectl -n kube-system describe secret kubernetes-dashboard-token-
-
-kubectl proxy
-
-http://localhost:8001/api/v1/namespaces/kube-system/services/https:kubernetes-dashboard:/proxy/
-```
-
-### web
-
-```
-apiVersion: extensions/v1beta1
-kind: Ingress
-metadata:
-  name: whoami-ingress
-  annotations:
-    ingress.kubernetes.io/ssl-redirect: "false"
-spec:
-  rules:
-  - http:
-      paths: 
-      - path: /
-        backend:
-          serviceName: whoami
-          servicePort: 4567
----
-
-apiVersion: apps/v1beta2
-kind: Deployment
-metadata:
-  name: whoami
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      type: frontend
-      service: whoami
-  template:
-    metadata:
-      labels:
-        type: frontend
-        service: whoami
-    spec:
-      containers:
-      - name: k8s-frontend
-        image: subicura/whoami:1
-
----
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: whoami
-spec:
-  ports:
-  - port: 4567
-  selector:
-    type: frontend
-    service: whoami
-```
-
-```
-k get ing
-k describe ing/whoami-ingress
-```
-
-```
-while true
-do
-  curl af407b8d833da11e8b30002b42a4da15-1257421023.ap-northeast-2.elb.amazonaws.com/whoami
-  echo ""
-	sleep 1
-done
-```
-
-```
-while true
-do
-  kubectl get pods
-	sleep 1
-done
-```
-
-
-```
-k rollout history deploy/whoami
-k rollout undo deployment/whoami
-k rollout undo deployment/whoami --to-revision=2
 ```
